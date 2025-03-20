@@ -1,6 +1,7 @@
 from mysql.connector import MySQLConnection, Error
 from configparser import ConfigParser
 from datetime import datetime
+from tabulate import tabulate
 
 
 def read_config(filename="app.ini", section="mysql"):
@@ -79,6 +80,14 @@ def insert_or_update_product(conn, product_id, pd_name, price, ex_date, num):
             """
             cursor.execute(update_query, (num, existing_id))
             product_id = existing_id  # 실제 사용된 product_id
+
+            # 입고 이력 기록 (stock_logs에 추가)
+            stock_log_query = """
+            INSERT INTO stock_logs (change_type, quantity_change, change_time, product_id)
+            VALUES ('입고', %s, NOW(), %s)
+            """
+            cursor.execute(stock_log_query, (num, product_id))
+
         else:
             # 신규 상품 등록
             insert_query = """
@@ -101,26 +110,39 @@ def insert_or_update_product(conn, product_id, pd_name, price, ex_date, num):
             )
             # ----------------------------------------
 
+            # 신규 입고 이력 기록 (stock_logs에 추가)
+            stock_log_query = """
+            INSERT INTO stock_logs (change_type, quantity_change, change_time, product_id)
+            VALUES ('입고', %s, NOW(), %s)
+            """
+            cursor.execute(stock_log_query, (num, product_id))
+
     conn.commit()
+
 
 
 def query_with_fetchall(conn):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM products")
     rows = cursor.fetchall()
-    print("총 상품 개수:", cursor.rowcount)
+
+    # 총 상품 개수 출력
+    print(f"총 상품 개수: {cursor.rowcount}")
     print()
 
-    for idx, row in enumerate(rows, start=1):
-        product_id, name, price, ex_date, quantity = row
-        print(f"[{idx}] 상품 ID: {product_id}")
-        print(f"    상품명: {name}")
-        print(f"    가격: {price}원")
-        print(f"    유통기한: {ex_date}")
-        print(f"    수량: {quantity}개")
-        print("-" * 40)
+    if rows:
+        # 표 형식으로 출력할 컬럼 헤더
+        headers = ["상품 ID", "상품명", "가격", "유통기한", "수량"]
 
-    return rows
+        # 결과 데이터를 표 형식으로 변환
+        table = [
+            (row[0], row[1], row[2], row[3], row[4]) for row in rows
+        ]
+
+        # 표 형식으로 출력
+        print(tabulate(table, headers=headers, tablefmt="grid", numalign="center"))
+    else:
+        print("상품 목록이 없습니다.")
 
 
 # 가짜 회사명명
@@ -163,11 +185,11 @@ def generate_fake_address(product_id):
     return f"{regions[region_code]} {product_id % 100}번길"
 
 
-# 메뉴3번
+# 메뉴3번(공급업체랑 상품과 join 출력력)
 def get_supplier_and_product_info(conn):
     # 커서 생성
     cursor = conn.cursor()
-    
+
     # 공급업체와 제품 정보를 JOIN하여 조회하는 쿼리
     query = """
     SELECT 
@@ -185,14 +207,152 @@ def get_supplier_and_product_info(conn):
     JOIN 
         products p ON s.product_id = p.product_id;
     """
-    
+
     # 쿼리 실행
     cursor.execute(query)
     rows = cursor.fetchall()
 
     # 결과 출력
-    print("공급업체 및 제품 정보:")
-    for row in rows:
-        print(f"공급업체 ID: {row[0]}, 공급업체 이름: {row[1]}, 연락처: {row[2]}, 주소: {row[3]}")
-        print(f"상품 ID: {row[4]}, 상품명: {row[5]}, 가격: {row[6]}, 유통기한: {row[7]}, 수량: {row[8]}")
-        print("-" * 40)
+    if rows:
+        # 표 형식으로 출력할 컬럼 헤더
+        headers = [
+            "공급업체 ID", "공급업체 이름", "연락처", "주소", 
+            "상품 ID", "상품명", "가격", "유통기한", "수량"
+        ]
+        
+        # 결과 데이터를 표 형식으로 변환
+        table = [(
+            row[0],  # supplier_id
+            row[1],  # supplier_name
+            row[2],  # supplier_contact
+            row[3],  # supplier_address
+            row[4],  # product_id
+            row[5],  # product_name
+            row[6],  # product_price
+            row[7],  # product_expiration
+            row[8]   # product_quantity
+        ) for row in rows]
+
+        # 표 형식으로 출력
+        print(tabulate(table, headers=headers, tablefmt="grid", numalign="center"))
+    else:
+        print("공급업체 및 제품 정보가 없습니다.")
+
+# 메뉴4번(초기목록생성)
+def sell_list(conn):
+    cursor = conn.cursor()
+
+    # 1. 상품 목록 출력
+    print("판매할 상품 목록:")
+    cursor.execute("SELECT product_id, name, quantity FROM products")
+    products = cursor.fetchall()
+
+    if not products:
+        print("등록된 상품이 없습니다.")
+        return
+
+    for product in products:
+        product_id, name, quantity = product
+        print(f"상품 코드: {product_id}, 상품명: {name}, 수량: {quantity}")
+
+    print("-" * 40)
+
+# 메뉴4번(판매)
+def sell_product(conn, product_id_input):
+    cursor = conn.cursor()
+
+    # 3. 입력한 상품이 존재하는지 확인
+    cursor.execute(
+        "SELECT product_id, name, quantity, price FROM products WHERE product_id = %s",
+        (product_id_input,),
+    )
+    product = cursor.fetchone()
+
+    if not product:
+        print("해당 상품은 존재하지 않습니다.")
+        return
+
+    product_id, name, available_quantity, price = product  # 가격을 추가로 가져옴
+
+    # 4. 판매할 수량 입력받기
+    quantity_to_sell = int(input("판매할 수량을 입력하세요: "))
+
+    # 5. 판매 수량이 재고보다 많은지 확인
+    if quantity_to_sell > available_quantity:
+        print("판매 수량이 재고보다 많습니다.")
+        return
+
+    # 6. 수량 업데이트
+    new_quantity = available_quantity - quantity_to_sell
+    cursor.execute(
+        """
+        UPDATE products
+        SET quantity = %s
+        WHERE product_id = %s
+    """,
+        (new_quantity, product_id),
+    )
+
+    # 7. 판매 이력 기록 (sales 테이블에 저장)
+    total_price = quantity_to_sell * price  # 가격을 테이블에서 가져온 값으로 계산
+    cursor.execute(
+        """
+        INSERT INTO sales (quantity_sold, total_price, sale_date, product_id)
+        VALUES (%s, %s, NOW(), %s)
+    """,
+        (quantity_to_sell, total_price, product_id),
+    )
+
+    # 8. 판매 이력 기록 (stock_logs 테이블에 저장)
+    cursor.execute(
+        """
+        INSERT INTO stock_logs (change_type, quantity_change, change_time, product_id)
+        VALUES ('판매', %s, NOW(), %s)
+    """,
+        (quantity_to_sell, product_id),
+    )
+
+    # 변경사항 커밋
+    conn.commit()
+
+    print(f"{name} 상품의 수량이 {quantity_to_sell}개 판매되었습니다.")
+    print(f"판매 금액: {total_price}원")
+
+# 메뉴5번(이력 조회)
+def view_stock_logs(conn):
+    cursor = conn.cursor()
+
+    # stock_logs와 products 테이블을 JOIN하여 필요한 데이터 조회
+    cursor.execute("""
+        SELECT 
+            sl.change_type,
+            sl.quantity_change,
+            sl.change_time,
+            p.product_id,
+            p.name,
+            p.quantity
+        FROM 
+            stock_logs sl
+        JOIN 
+            products p ON sl.product_id = p.product_id;
+    """)
+
+    # 결과 가져오기
+    records = cursor.fetchall()
+
+    # 결과 출력
+    if records:
+        # 표 형식으로 출력
+        headers = ["상품명", "상품번호", "변경 유형", "수량 변화", "변경 시간", "현재 재고"]
+        table = [(
+            record[4],  # name
+            record[3],  # product_id
+            record[0],  # change_type
+            record[1],  # quantity_change
+            record[2],  # change_time
+            record[5]   # quantity
+        ) for record in records]
+        
+        print(tabulate(table, headers=headers, tablefmt="grid", numalign="center"))
+    else:
+        print("출고/입고 이력이 없습니다.")

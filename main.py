@@ -34,35 +34,19 @@ while True:
     # 공급 업체 검색
     elif menu == "3":
         cf.get_supplier_and_product_info(conn)
-        
 
+    # 판매
     elif menu == "4":
-        action = input("수정하려면 1을, 삭제하려면 2를 입력하세요: ").strip()
+        cf.sell_list(conn)
 
-        if action == "1":  # 수량 수정
-            name = input("수정할 상품명을 입력하세요: ")
-            num = input("새로운 수량을 입력하세요: ")
+        # 2. 사용자 입력 받기 (상품코드와 수량)
+        product_id_input = int(input("판매할 상품 코드를 입력하세요: "))
 
-            updated_rows = csf.update_Product(conn, name, num)
-            if updated_rows > 0:
-                print(f"'{name}'의 수량이 {num}으로 변경되었습니다.")
-            else:
-                print("해당 상품을 찾을 수 없습니다.")
+        cf.sell_product(conn, product_id_input)
 
-        elif action == "2":  # 삭제 기능 추가
-            name = input("삭제할 상품명을 입력하세요: ")
-            deleted_rows = csf.delete_Product(conn, name)
-
-            if deleted_rows > 0:
-                print(f"'{name}' 상품이 삭제되었습니다.")
-            else:
-                print("해당 상품을 찾을 수 없습니다.")
-
-        else:
-            print("잘못된 입력입니다. 다시 시도하세요.")
-
+    # 이력 조회
     elif menu == "5":
-        csf.show_product_logs(conn)
+        cf.view_stock_logs(conn)
 
     elif menu == "6":
         print("프로그램 종료")
