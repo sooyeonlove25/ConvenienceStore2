@@ -330,8 +330,7 @@ def view_stock_logs(conn):
             sl.quantity_change,
             sl.change_time,
             p.product_id,
-            p.name,
-            p.quantity
+            p.name
         FROM 
             stock_logs sl
         JOIN 
@@ -344,14 +343,13 @@ def view_stock_logs(conn):
     # 결과 출력
     if records:
         # 표 형식으로 출력
-        headers = ["상품명", "상품번호", "변경 유형", "수량 변화", "변경 시간", "현재 재고"]
+        headers = ["상품명", "상품번호", "변경 유형", "수량 변화", "변경 시간"]
         table = [(
             record[4],  # name
             record[3],  # product_id
             record[0],  # change_type
             record[1],  # quantity_change
-            record[2],  # change_time
-            record[5]   # quantity
+            record[2]   # change_time
         ) for record in records]
         
         print(tabulate(table, headers=headers, tablefmt="grid", numalign="center"))
