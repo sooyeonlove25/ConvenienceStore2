@@ -244,7 +244,7 @@ def sell_list(conn):
 
     # 1. 상품 목록 출력
     print("판매할 상품 목록:")
-    cursor.execute("SELECT product_id, name, quantity FROM products")
+    cursor.execute("SELECT product_id, name, quantity, price FROM products")
     products = cursor.fetchall()
 
     if not products:
@@ -252,10 +252,11 @@ def sell_list(conn):
         return
 
     for product in products:
-        product_id, name, quantity = product
-        print(f"상품 코드: {product_id}, 상품명: {name}, 수량: {quantity}")
+        product_id, name, quantity, price = product
+        print(f"상품 코드: {product_id}, 상품명: {name}, 수량: {quantity}, 가격: {price}원")
 
     print("-" * 40)
+
 
 # 메뉴4번(판매)
 def sell_product(conn, product_id_input):
