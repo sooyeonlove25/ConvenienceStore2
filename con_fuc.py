@@ -354,4 +354,4 @@ def view_stock_logs(conn):
         
         print(tabulate(table, headers=headers, tablefmt="grid", numalign="center"))
     else:
-        print("출고/입고 이력이 없습니다.")
+        print("판매/입고 이력이 없습니다.")
